@@ -1,0 +1,99 @@
+import keyboard
+import pyautogui
+from PIL import Image
+import pytesseract
+import sys
+import time
+import os
+
+# --- 1. Configuration and Setup ---
+
+# Set the path to the Tesseract executable (Crucial step!)
+# 🔑 IMPORTANT: Replace the path below with your actual Tesseract path.
+# Example Windows Path: r'C:\Program Files\Tesseract-OCR\tesseract.exe'
+# Example Linux/macOS Path: '/usr/bin/tesseract'
+TESSERACT_PATH = r'C:\Program Files\Tesseract-OCR\tesseract.exe' 
+pytesseract.pytesseract.tesseract_cmd = TESSERACT_PATH
+
+# Define your custom hotkey mappings (Hotkey: Target Button Text)
+# Use keys that are easy to reach (e.g., Alt + first letter of the button)
+HOTKEY_MAP = {
+    'alt+s': 'Search',
+    'alt+r': 'Reset',
+    'alt+c': 'Create',
+    'alt+b': 'Switch to parts requisition', # For the full text of the lower right button
+    'alt+p': 'Print parameters', 
+}
+
+# --- 2. Core Logic (The OCR and Click Function) ---
+
+def find_and_click(target_text):
+    """
+    Captures the screen, uses OCR to find the text, and clicks its location.
+    """
+    try:
+        # Check if Tesseract is configured
+        if not os.path.exists(TESSERACT_PATH):
+            print("ERROR: Tesseract path is incorrect or Tesseract is not installed.")
+            print(f"Expected path: {TESSERACT_PATH}")
+            return
+
+        print(f"\nScanning for: '{target_text}'...")
+        
+        # 1. Capture Screenshot
+        screenshot = pyautogui.screenshot()
+        
+        # 2. Run OCR to get structured data (including coordinates)
+        ocr_data = pytesseract.image_to_data(screenshot, output_type=pytesseract.Output.DICT)
+        
+        found = False
+        
+        # 3. Iterate and Find Match
+        for i in range(len(ocr_data['text'])):
+            text_on_screen = ocr_data['text'][i].strip()
+            
+            # Simple check: Convert both to lowercase for robust matching
+            if text_on_screen.lower() == target_text.lower():
+                
+                # Get the center coordinates of the recognized text block
+                x = ocr_data['left'][i] + ocr_data['width'][i] // 2
+                y = ocr_data['top'][i] + ocr_data['height'][i] // 2
+                
+                print(f"✅ FOUND '{target_text}' at ({x}, {y}). Clicking...")
+                
+                # 4. Perform the Click
+                pyautogui.moveTo(x, y, duration=0) # Move instantly
+                pyautogui.click()
+                found = True
+                break # Stop after the first match
+        
+        if not found:
+            print(f"❌ '{target_text}' not found on screen.")
+            
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+# --- 3. Listener Setup and Execution ---
+
+def setup_hotkeys():
+    """
+    Registers all defined hotkeys to their respective click functions.
+    """
+    for hotkey, target_text in HOTKEY_MAP.items():
+        # Lambda function allows us to pass arguments to the clicker function
+        keyboard.add_hotkey(hotkey, lambda t=target_text: find_and_click(t))
+        print(f"Registered hotkey: **{hotkey}** to click button **'{target_text}'**")
+
+if __name__ == "__main__":
+    setup_hotkeys()
+    print("\n---------------------------------------------------------")
+    print("🚀 DeskPilot is running. Press your configured hotkeys to click.")
+    print("Press **Ctrl+C** to exit the program.")
+    print("---------------------------------------------------------")
+
+    # Keep the script running and listening for hotkeys
+    try:
+        keyboard.wait('ctrl+c') 
+    except KeyboardInterrupt:
+        print("\n👋 Exiting DeskPilot.")
+        sys.exit(0)
