@@ -163,10 +163,17 @@ function getCommandFromKey(key) {
 
 // Key handler
 document.addEventListener('keydown', (e) => {
-  // Show hints on Right Alt
-  if (e.altKey && e.location === 2) {
+  // Show hints on Right Alt (robust detection across layouts)
+  const isRightAlt =
+    e.code === 'AltRight' ||
+    e.key === 'AltGraph' ||
+    (e.key === 'Alt' && e.location === 2);
+  const altGraphState = e.getModifierState && e.getModifierState('AltGraph');
+  if (isRightAlt || altGraphState) {
     e.preventDefault();
     e.stopPropagation();
+    // Debug: verify the AltRight event is captured
+    try { console.debug('[DeskPilot] Right Alt pressed - triggering hints'); } catch(e) {}
     Hinter.showHints(false);
     return;
   }
@@ -224,7 +231,7 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     CommandRegistry[cmd]();
   }
-});
+}, true);
 
 // Initialize
 (async function init() {
