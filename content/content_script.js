@@ -184,13 +184,14 @@ document.addEventListener('keydown', (e) => {
     (e.ctrlKey && e.altKey && !e.shiftKey && !e.metaKey &&
       (e.key === 'Alt' || e.key === 'AltGraph' || e.code === 'AltRight' || e.location === 2));
   const altGraphState = e.getModifierState && e.getModifierState('AltGraph');
-  if ((isRightAlt || altGraphState || isAltGrLike) && !rightAltActive) {
-    rightAltActive = true;
+  if (isRightAlt || altGraphState || isAltGrLike) {
     e.preventDefault();
     e.stopPropagation();
-    // Debug: verify the AltRight event is captured
-    try { console.debug('[DeskPilot] Right Alt pressed - toggling hints'); } catch(e) {}
-    toggleHintOverlay();
+    if (!rightAltActive) {
+      rightAltActive = true;
+      try { console.debug('[DeskPilot] Right Alt pressed - toggling hints'); } catch(e) {}
+      toggleHintOverlay();
+    }
     return;
   }
 

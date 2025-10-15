@@ -1,0 +1,211 @@
+import os
+import shutil
+import sys
+import string
+import threading
+from typing import Dict, Optional
+
+import keyboard
+import pyautogui
+import pytesseract
+from PIL import Image
+import tkinter as tk
+
+# --- Configuration ---
+
+pyautogui.FAILSAFE = True
+pyautogui.PAUSE = 0.05
+
+CONFIGURED_TESSERACT_PATH = r'C:\Users\atruett\AppData\Local\Programs\Tesseract-OCR\tesseract.exe'
+
+HOTKEY_MAP: Dict[str, str] = {
+    'alt+s': 'Search',
+    'alt+r': 'Reset',
+    'alt+c': 'Create',
+    'alt+b': 'Switch to parts requisition',
+    'alt+p': 'Print parameters',
+}
+
+MIN_CONFIDENCE = 60
+OCR_CONFIG = '--psm 6'
+
+
+# --- Tesseract Resolver ---
+def resolve_tesseract_command(explicit_path: Optional[str]) -> Optional[str]:
+    candidates = [explicit_path] if explicit_path else []
+    env_path = os.environ.get('TESSERACT_PATH')
+    if env_path:
+        candidates.append(env_path)
+    which_path = shutil.which('tesseract')
+    if which_path:
+        candidates.append(which_path)
+    candidates.extend([
+        r'C:\Program Files\Tesseract-OCR\tesseract.exe',
+        r'C:\Program Files (x86)\Tesseract-OCR\tesseract.exe',
+        '/usr/local/bin/tesseract',
+        '/usr/bin/tesseract',
+    ])
+    for c in candidates:
+        if c and os.path.exists(c):
+            return c
+    return None
+
+
+RESOLVED_TESSERACT_CMD = resolve_tesseract_command(CONFIGURED_TESSERACT_PATH)
+if RESOLVED_TESSERACT_CMD:
+    pytesseract.pytesseract.tesseract_cmd = RESOLVED_TESSERACT_CMD
+else:
+    print('WARNING: Unable to locate Tesseract. OCR hotkeys will be disabled.')
+
+
+# --- Utilities ---
+def _normalise(text: str) -> str:
+    return text.strip().lower()
+
+
+def _click_at(x: int, y: int) -> None:
+    pyautogui.moveTo(x, y, duration=0)
+    pyautogui.click()
+
+
+def find_and_click(target_text: str) -> None:
+    try:
+        if not RESOLVED_TESSERACT_CMD:
+            print('ERROR: Tesseract not configured.')
+            return
+        print(f"\nScanning for '{target_text}'...")
+        screenshot: Image.Image = pyautogui.screenshot().convert('L')
+        ocr = pytesseract.image_to_data(screenshot, output_type=pytesseract.Output.DICT, config=OCR_CONFIG)
+        for i, text in enumerate(ocr['text']):
+            candidate = _normalise(text)
+            if not candidate:
+                continue
+            try:
+                conf = float(ocr['conf'][i])
+            except (ValueError, KeyError):
+                conf = -1
+            if conf < MIN_CONFIDENCE:
+                continue
+            if _normalise(target_text) not in candidate:
+                continue
+            x = ocr['left'][i] + ocr['width'][i] // 2
+            y = ocr['top'][i] + ocr['height'][i] // 2
+            print(f"✔ Found '{target_text}' at ({x}, {y}) with {conf:.0f}% confidence.")
+            _click_at(x, y)
+            return
+        print(f"✘ '{target_text}' not found.")
+    except Exception as exc:
+        print(f'Error: {exc}')
+
+
+def setup_hotkeys():
+    for hk, text in HOTKEY_MAP.items():
+        keyboard.add_hotkey(hk, lambda t=text: find_and_click(t))
+        print(f"Registered hotkey: {hk} → '{text}'")
+
+
+# --- Vimium-like Overlay ---
+
+class VimiumOverlay:
+    def __init__(self):
+        self.root = tk.Tk()
+        self.root.withdraw()
+        self.root.attributes('-topmost', True)
+        self.root.overrideredirect(True)
+        self.labels = {}
+        self.map = {}
+
+    def _generate_labels(self, count):
+        letters = list(string.ascii_uppercase)
+        combos = letters[:]
+        for a in letters:
+            for b in letters:
+                combos.append(a + b)
+        return combos[:count]
+
+    def show(self, hits):
+        """Show letter tags for OCR-detected text areas."""
+        for lbl in self.labels.values():
+            lbl.destroy()
+        self.labels.clear()
+        self.map.clear()
+
+        labels = self._generate_labels(len(hits))
+        for tag, (x, y) in zip(labels, hits):
+            lbl = tk.Label(self.root, text=tag, fg='black', bg='yellow', font=('Consolas', 10, 'bold'))
+            lbl.place(x=x, y=y)
+            self.labels[tag] = lbl
+            self.map[_normalise(tag)] = (x, y)
+        self.root.deiconify()
+
+    def hide(self):
+        for lbl in self.labels.values():
+            lbl.destroy()
+        self.labels.clear()
+        self.map.clear()
+        self.root.withdraw()
+
+
+def ocr_screen_hits():
+    """Return list of (x,y) centers for visible text blocks."""
+    screenshot = pyautogui.screenshot().convert('L')
+    data = pytesseract.image_to_data(screenshot, output_type=pytesseract.Output.DICT, config=OCR_CONFIG)
+    hits = []
+    for i, text in enumerate(data['text']):
+        if not text.strip():
+            continue
+        try:
+            conf = float(data['conf'][i])
+        except (ValueError, KeyError):
+            conf = -1
+        if conf < MIN_CONFIDENCE:
+            continue
+        x = data['left'][i] + data['width'][i] // 2
+        y = data['top'][i] + data['height'][i] // 2
+        hits.append((x, y))
+    return hits
+
+
+def fn_mode_listener(overlay: VimiumOverlay):
+    """Show OCR overlay on Right Ctrl hold."""
+    while True:
+        keyboard.wait('right ctrl')
+        print("FN MODE → Scanning screen...")
+        hits = ocr_screen_hits()
+        overlay.show(hits)
+        print(f"Overlay active with {len(hits)} targets.")
+
+        # Wait for key press corresponding to tag
+        while keyboard.is_pressed('right ctrl'):
+            event = keyboard.read_event(suppress=False)
+            if event.event_type == keyboard.KEY_DOWN:
+                key = event.name.upper()
+                if key in overlay.map:
+                    x, y = overlay.map[key]
+                    print(f"Clicked {key} at ({x},{y})")
+                    _click_at(x, y)
+                    overlay.hide()
+                    break
+        overlay.hide()
+
+
+# --- Main ---
+
+if __name__ == '__main__':
+    setup_hotkeys()
+
+    overlay = VimiumOverlay()
+
+    threading.Thread(target=fn_mode_listener, args=(overlay,), daemon=True).start()
+
+    print('\n---------------------------------------------------------')
+    print('DeskPilot + Vimium Mode Active')
+    print('Hold RIGHT CTRL to enter FN MODE. Type letter tags to click.')
+    print('Press Ctrl+C to quit.')
+    print('---------------------------------------------------------')
+
+    try:
+        overlay.root.mainloop()
+    except KeyboardInterrupt:
+        print('\nExiting DeskPilot.')
+        sys.exit(0)
