@@ -3,6 +3,7 @@ let settings = {};
 let mode = 'normal';
 let keySequence = '';
 let sequenceTimeout = null;
+let rightAltActive = false;
 
 // Mode manager
 const ModeManager = {
@@ -168,8 +169,12 @@ document.addEventListener('keydown', (e) => {
     e.code === 'AltRight' ||
     e.key === 'AltGraph' ||
     (e.key === 'Alt' && e.location === 2);
+  const isAltGrLike =
+    (e.ctrlKey && e.altKey && !e.shiftKey && !e.metaKey &&
+      (e.key === 'Alt' || e.key === 'AltGraph' || e.code === 'AltRight' || e.location === 2));
   const altGraphState = e.getModifierState && e.getModifierState('AltGraph');
-  if (isRightAlt || altGraphState) {
+  if ((isRightAlt || altGraphState || isAltGrLike) && !rightAltActive) {
+    rightAltActive = true;
     e.preventDefault();
     e.stopPropagation();
     // Debug: verify the AltRight event is captured
@@ -230,6 +235,28 @@ document.addEventListener('keydown', (e) => {
   if (cmd && CommandRegistry[cmd]) {
     e.preventDefault();
     CommandRegistry[cmd]();
+  }
+}, true);
+
+// Also listen on keyup to catch environments where AltGr only emits on release
+document.addEventListener('keyup', (e) => {
+  const isRightAlt =
+    e.code === 'AltRight' ||
+    e.key === 'AltGraph' ||
+    (e.key === 'Alt' && e.location === 2);
+  const isAltGrLike =
+    (e.ctrlKey && e.altKey && !e.shiftKey && !e.metaKey &&
+      (e.key === 'Alt' || e.key === 'AltGraph' || e.code === 'AltRight' || e.location === 2));
+  const altGraphState = e.getModifierState && e.getModifierState('AltGraph');
+  if (isRightAlt || altGraphState || isAltGrLike) {
+    e.preventDefault();
+    e.stopPropagation();
+    // If we didn't catch it on keydown, trigger on keyup
+    if (!rightAltActive) {
+      try { console.debug('[DeskPilot] Right Alt released - triggering hints'); } catch(e) {}
+      Hinter.showHints(false);
+    }
+    rightAltActive = false;
   }
 }, true);
 
