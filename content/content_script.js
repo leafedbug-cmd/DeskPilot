@@ -3,6 +3,7 @@ let settings = {};
 let mode = 'normal';
 let keySequence = '';
 let sequenceTimeout = null;
+let pendingSingle = null;
 let rightAltActive = false;
 
 // Mode manager
@@ -203,34 +204,90 @@ document.addEventListener('keydown', (e) => {
   if (e.shiftKey && key.length === 1) {
     key = key.toUpperCase();
   }
-  
-  // Handle sequences (like gg)
-  if (key === 'g') {
-    if (keySequence === 'g') {
-      e.preventDefault();
-      keySequence = '';
-      clearTimeout(sequenceTimeout);
-      const cmd = getCommandFromKey('gg');
-      if (cmd && CommandRegistry[cmd]) {
-        CommandRegistry[cmd]();
+
+  // Generic multi-key sequence handling
+  if (key.length === 1) {
+    const allKeys = settings.keyMappings ? Object.values(settings.keyMappings) : [];
+
+    const startsWith = (prefix) => allKeys.some(k => typeof k === 'string' && k.startsWith(prefix));
+    const hasLonger = (prefix) => allKeys.some(k => typeof k === 'string' && k.startsWith(prefix) && k.length > prefix.length);
+
+    const tryExecute = (mapping) => {
+      const c = getCommandFromKey(mapping);
+      if (c && CommandRegistry[c]) {
+        e.preventDefault();
+        CommandRegistry[c]();
+        return true;
       }
-      return;
-    } else {
-      keySequence = 'g';
-      sequenceTimeout = setTimeout(() => {
+      return false;
+    };
+
+    // If we already have a sequence in progress
+    if (keySequence) {
+      const attempt = keySequence + key;
+      // Exact match executes immediately
+      if (tryExecute(attempt)) {
         keySequence = '';
+        pendingSingle = null;
+        if (sequenceTimeout) { clearTimeout(sequenceTimeout); sequenceTimeout = null; }
+        return;
+      }
+      // Keep waiting if there are longer sequences beginning with the attempt
+      if (hasLonger(attempt)) {
+        keySequence = attempt;
+        // refresh timer
+        if (sequenceTimeout) clearTimeout(sequenceTimeout);
+        sequenceTimeout = setTimeout(() => {
+          // If a partial remains after timeout and has a shorter exact mapping, run it
+          if (pendingSingle) {
+            const c = pendingSingle; pendingSingle = null;
+            if (CommandRegistry[c]) CommandRegistry[c]();
+          }
+          keySequence = '';
+          sequenceTimeout = null;
+        }, 1000);
+        e.preventDefault();
+        return;
+      }
+      // Sequence broken. If there was a pending shorter command (e.g., 'j'), run it now
+      if (pendingSingle) {
+        const c = pendingSingle; pendingSingle = null;
+        if (CommandRegistry[c]) { e.preventDefault(); CommandRegistry[c](); }
+      }
+      keySequence = '';
+      if (sequenceTimeout) { clearTimeout(sequenceTimeout); sequenceTimeout = null; }
+      // Fall through to process current key as fresh
+    }
+
+    // No sequence in progress: start one if this key begins a multi-key mapping
+    if (hasLonger(key)) {
+      keySequence = key;
+      // If the single key itself maps to a command, defer it until timeout
+      const singleCmd = getCommandFromKey(key);
+      pendingSingle = singleCmd && CommandRegistry[singleCmd] ? singleCmd : null;
+      if (sequenceTimeout) clearTimeout(sequenceTimeout);
+      sequenceTimeout = setTimeout(() => {
+        if (pendingSingle) {
+          const c = pendingSingle; pendingSingle = null;
+          if (CommandRegistry[c]) CommandRegistry[c]();
+        }
+        keySequence = '';
+        sequenceTimeout = null;
       }, 1000);
+      e.preventDefault();
+      return;
+    }
+
+    // If not starting a longer sequence, try single-key command immediately
+    const cmdSingle = getCommandFromKey(key);
+    if (cmdSingle && CommandRegistry[cmdSingle]) {
+      e.preventDefault();
+      CommandRegistry[cmdSingle]();
       return;
     }
   }
-  
-  // Clear sequence on non-g key
-  keySequence = '';
-  if (sequenceTimeout) {
-    clearTimeout(sequenceTimeout);
-    sequenceTimeout = null;
-  }
-  
+
+  // Non-character keys or unmapped characters: direct lookup
   const cmd = getCommandFromKey(key);
   if (cmd && CommandRegistry[cmd]) {
     e.preventDefault();
