@@ -6,6 +6,16 @@ let sequenceTimeout = null;
 let pendingSingle = null;
 let rightAltActive = false;
 
+// Toggle hint overlay helper
+function toggleHintOverlay() {
+  try { console.debug('[DeskPilot] Toggling hint overlay'); } catch (e) {}
+  if (typeof Hinter !== 'undefined' && Hinter.hintElements && Hinter.hintElements.length > 0) {
+    Hinter.removeHints();
+  } else if (typeof Hinter !== 'undefined') {
+    Hinter.showHints(false);
+  }
+}
+
 // Mode manager
 const ModeManager = {
   enterInsertMode() {
@@ -179,8 +189,8 @@ document.addEventListener('keydown', (e) => {
     e.preventDefault();
     e.stopPropagation();
     // Debug: verify the AltRight event is captured
-    try { console.debug('[DeskPilot] Right Alt pressed - triggering hints'); } catch(e) {}
-    Hinter.showHints(false);
+    try { console.debug('[DeskPilot] Right Alt pressed - toggling hints'); } catch(e) {}
+    toggleHintOverlay();
     return;
   }
 
@@ -309,8 +319,8 @@ document.addEventListener('keyup', (e) => {
     e.stopPropagation();
     // If we didn't catch it on keydown, trigger on keyup
     if (!rightAltActive) {
-      try { console.debug('[DeskPilot] Right Alt released - triggering hints'); } catch(e) {}
-      Hinter.showHints(false);
+      try { console.debug('[DeskPilot] Right Alt released - toggling hints'); } catch(e) {}
+      toggleHintOverlay();
     }
     rightAltActive = false;
   }
