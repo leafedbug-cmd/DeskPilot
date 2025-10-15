@@ -196,8 +196,7 @@ document.addEventListener('keydown', (e) => {
   // Check exclusion rules
   if (isExcluded()) return;
   
-  // Ignore keys when in input fields (unless in normal mode)
-  if (shouldIgnoreKey() && mode === 'normal') return;
+  // Do not ignore keys in inputs while in NORMAL mode; insert mode already returns early above
   
   // Build key string
   let key = e.key;
