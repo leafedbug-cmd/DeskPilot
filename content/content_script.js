@@ -163,6 +163,14 @@ function getCommandFromKey(key) {
 
 // Key handler
 document.addEventListener('keydown', (e) => {
+  // Show hints on Right Alt
+  if (e.altKey && e.location === 2) {
+    e.preventDefault();
+    e.stopPropagation();
+    Hinter.showHints(false);
+    return;
+  }
+
   // Always allow Escape to exit insert mode
   if (e.key === 'Escape' && mode === 'insert') {
     ModeManager.enterNormalMode();
