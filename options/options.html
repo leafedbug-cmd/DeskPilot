@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>DeskPilot Options</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      margin-top: 0;
+      color: #333;
+    }
+    h2 {
+      margin-top: 30px;
+      margin-bottom: 15px;
+      color: #555;
+      font-size: 18px;
+      border-bottom: 2px solid #eee;
+      padding-bottom: 8px;
+    }
+    .section {
+      margin-bottom: 30px;
+    }
+    .key-mapping {
+      display: grid;
+      grid-template-columns: 200px 150px 50px;
+      gap: 10px;
+      margin-bottom: 10px;
+      align-items: center;
+    }
+    .key-mapping label {
+      font-weight: 500;
+    }
+    input[type="text"] {
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-family: monospace;
+    }
+    textarea {
+      width: 100%;
+      min-height: 100px;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 13px;
+    }
+    .checkbox-option {
+      margin: 15px 0;
+    }
+    .checkbox-option label {
+      display: flex;
+      align-items: center;
+      cursor: pointer;
+    }
+    .checkbox-option input {
+      margin-right: 10px;
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+    button {
+      padding: 10px 20px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      margin-right: 10px;
+    }
+    button:hover {
+      background: #45a049;
+    }
+    button.secondary {
+      background: #2196F3;
+    }
+    button.secondary:hover {
+      background: #0b7dda;
+    }
+    .status {
+      display: inline-block;
+      margin-left: 10px;
+      padding: 5px 10px;
+      background: #4CAF50;
+      color: white;
+      border-radius: 4px;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .status.show {
+      opacity: 1;
+    }
+    .exclusion-list {
+      margin-top: 10px;
+    }
+    .exclusion-item {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+    .exclusion-item input {
+      flex: 1;
+    }
+    .exclusion-item button {
+      padding: 5px 15px;
+      background: #f44336;
+    }
+    .exclusion-item button:hover {
+      background: #da190b;
+    }
+    .add-exclusion {
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>⌨️ DeskPilot Options</h1>
+    
+    <div class="section">
+      <h2>Key Mappings</h2>
+      <div id="keyMappings"></div>
+    </div>
+    
+    <div class="section">
+      <h2>Exclusion Rules</h2>
+      <p>Add URL patterns where DeskPilot should be disabled (use * as wildcard):</p>
+      <div id="exclusionList" class="exclusion-list"></div>
+      <div class="add-exclusion">
+        <input type="text" id="newExclusion" placeholder="e.g., https://mail.google.com/*">
+        <button onclick="addExclusion()">Add Rule</button>
+      </div>
+    </div>
+    
+    <div class="section">
+      <h2>Behavior Settings</h2>
+      <div class="checkbox-option">
+        <label>
+          <input type="checkbox" id="smoothScrolling">
+          Enable Smooth Scrolling
+        </label>
+      </div>
+      <div style="margin: 15px 0;">
+        <label>Scroll Step Size (pixels):</label>
+        <input type="number" id="scrollStepSize" min="10" max="500" style="width: 100px; margin-left: 10px;">
+      </div>
+    </div>
+    
+    <div class="section">
+      <h2>Custom CSS</h2>
+      <p>Add custom CSS to style hint overlays and dialogs:</p>
+      <textarea id="customCSS" placeholder=".deskpilot-hint { background: #ff0000; }"></textarea>
+    </div>
+    
+    <div class="section">
+      <h2>Data Management</h2>
+      <button class="secondary" onclick="exportSettings()">Export Settings</button>
+      <button class="secondary" onclick="importSettings()">Import Settings</button>
+      <input type="file" id="importFile" accept=".json" style="display: none;">
+    </div>
+    
+    <div style="margin-top: 30px;">
+      <button onclick="saveSettings()">Save All Settings</button>
+      <button class="secondary" onclick="resetToDefaults()">Reset to Defaults</button>
+      <span id="status" class="status">Saved!</span>
+    </div>
+  </div>
+  
+  <script src="options.js"></script>
+</body>
+</html>
