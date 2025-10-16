@@ -8,6 +8,7 @@ let rightAltActive = false;
 
 // Toggle hint overlay helper
 function toggleHintOverlay() {
+  if (settings.extensionEnabled === false) return;
   try { console.debug('[DeskPilot] Toggling hint overlay'); } catch (e) {}
   if (typeof Hinter !== 'undefined' && Hinter.hintElements && Hinter.hintElements.length > 0) {
     Hinter.removeHints();
@@ -175,6 +176,7 @@ function getCommandFromKey(key) {
 
 // Key handler
 document.addEventListener('keydown', (e) => {
+  if (settings.extensionEnabled === false) return;
   // Show hints on Right Alt (robust detection across layouts)
   const isRightAlt =
     e.code === 'AltRight' ||
@@ -307,6 +309,7 @@ document.addEventListener('keydown', (e) => {
 
 // Also listen on keyup to catch environments where AltGr only emits on release
 document.addEventListener('keyup', (e) => {
+  if (settings.extensionEnabled === false) return;
   const isRightAlt =
     e.code === 'AltRight' ||
     e.key === 'AltGraph' ||
@@ -330,6 +333,9 @@ document.addEventListener('keyup', (e) => {
 // Initialize
 (async function init() {
   settings = await StorageHelper.getSettings();
+  if (typeof settings.extensionEnabled === 'undefined') {
+    settings.extensionEnabled = true;
+  }
   
   if (isExcluded()) return;
   
@@ -349,4 +355,16 @@ chrome.storage.onChanged.addListener((changes) => {
     settings[key] = changes[key].newValue;
   }
   Scroller.init(settings);
+  if (changes.extensionEnabled && changes.extensionEnabled.newValue === false) {
+    Hinter.removeHints();
+    HelpDialog.hide();
+    mode = 'normal';
+    keySequence = '';
+    pendingSingle = null;
+    rightAltActive = false;
+    if (sequenceTimeout) {
+      clearTimeout(sequenceTimeout);
+      sequenceTimeout = null;
+    }
+  }
 });

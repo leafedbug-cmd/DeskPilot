@@ -1,8 +1,9 @@
 // Service worker for cross-tab actions
 let settings = {};
+const CONTEXT_MENU_TOGGLE_ID = 'deskpilot-toggle-extension';
 
 // Load settings on startup
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener((details) => {
   const defaultSettings = {
     keyMappings: {
       scrollDown: 'j',
@@ -27,22 +28,81 @@ chrome.runtime.onInstalled.addListener(async () => {
     exclusionRules: [],
     smoothScrolling: true,
     scrollStepSize: 60,
-    customCSS: ''
+    customCSS: '',
+    extensionEnabled: true
   };
-  
-  await chrome.storage.sync.set(defaultSettings);
-  settings = defaultSettings;
+
+  chrome.storage.sync.get(null, async (current) => {
+    if (details.reason === 'install') {
+      await chrome.storage.sync.set(defaultSettings);
+      settings = defaultSettings;
+    } else {
+      const updates = {};
+      for (const key of Object.keys(defaultSettings)) {
+        if (typeof current[key] === 'undefined') {
+          updates[key] = defaultSettings[key];
+        }
+      }
+      if (Object.keys(updates).length > 0) {
+        await chrome.storage.sync.set(updates);
+      }
+      settings = { ...defaultSettings, ...current, ...updates };
+    }
+    initializeContextMenu();
+    updateActionBadge(settings.extensionEnabled !== false);
+  });
 });
 
 chrome.storage.sync.get(null, (items) => {
-  settings = items;
+  settings = { extensionEnabled: true, ...items };
+  initializeContextMenu();
+  updateActionBadge(settings.extensionEnabled !== false);
 });
 
 chrome.storage.onChanged.addListener((changes) => {
   for (let key in changes) {
     settings[key] = changes[key].newValue;
   }
+  if (changes.extensionEnabled) {
+    const enabled = changes.extensionEnabled.newValue !== false;
+    updateContextMenuState(enabled);
+    updateActionBadge(enabled);
+  }
 });
+
+chrome.contextMenus.onClicked.addListener((info) => {
+  if (info.menuItemId === CONTEXT_MENU_TOGGLE_ID) {
+    const enabled = info.checked;
+    chrome.storage.sync.set({ extensionEnabled: enabled });
+  }
+});
+
+function initializeContextMenu() {
+  chrome.contextMenus.removeAll(() => {
+    chrome.contextMenus.create({
+      id: CONTEXT_MENU_TOGGLE_ID,
+      title: 'Enable DeskPilot',
+      contexts: ['action'],
+      type: 'checkbox',
+      checked: settings.extensionEnabled !== false
+    });
+  });
+}
+
+function updateContextMenuState(enabled) {
+  chrome.contextMenus.update(CONTEXT_MENU_TOGGLE_ID, {
+    checked: enabled
+  }, () => void chrome.runtime.lastError);
+}
+
+function updateActionBadge(enabled) {
+  if (enabled) {
+    chrome.action.setBadgeText({ text: '' });
+  } else {
+    chrome.action.setBadgeBackgroundColor({ color: '#d93025' });
+    chrome.action.setBadgeText({ text: 'OFF' });
+  }
+}
 
 // Handle messages from content scripts
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
